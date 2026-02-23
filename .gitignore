@@ -1,41 +1,68 @@
-# Prerequisites
-*.d
+# ================================
+# ESP-IDF Build Artifacts
+# ================================
+build/
+build_*/
+out/
+dist/
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+# SDK config (machine-specific)
+sdkconfig
+sdkconfig.old
+sdkconfig.*.old
 
-# Precompiled Headers
-*.gch
-*.pch
+# ================================
+# CMake
+# ================================
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
 
-# Linker files
-*.ilk
+# ================================
+# Dependency locks (optional)
+# ================================
+dependencies.lock
 
-# Debugger Files
-*.pdb
+# ================================
+# Python virtual environments
+# ================================
+venv/
+.env/
+.venv/
+env/
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
+# ================================
+# VSCode
+# ================================
+.vscode/
+*.code-workspace
 
-# Fortran module files
-*.mod
-*.smod
+# ================================
+# CLion / JetBrains
+# ================================
+.idea/
+cmake-build-*/
 
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
+# ================================
+# macOS
+# ================================
+.DS_Store
 
-# Executables
-*.exe
-*.out
-*.app
+# ================================
+# Linux
+# ================================
+*~
 
-# debug information files
-*.dwo
+# ================================
+# Windows
+# ================================
+Thumbs.db
+Desktop.ini
+
+# ================================
+# Logs & temp
+# ================================
+*.log
+*.tmp
+*.swp
