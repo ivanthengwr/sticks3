@@ -37,7 +37,7 @@ extern const uint8_t music_pcm_end[]   asm("_binary_canon_pcm_end");
  * then fully tears down the bus so the ES8311 driver can safely claim the pins.
  * Must be called FIRST in app_main(), before I2S or ES8311 initialisation.
  */
-void m5pm1_new_api_power_setup(void) {
+static esp_err_t m5pm1_new_api_power_setup(void) {
     ESP_LOGI("M5PM1", "Configuring M5PM1 using NEW I2C API...");
 
     /* 1. Create a temporary master bus on the shared pins */
@@ -64,7 +64,7 @@ void m5pm1_new_api_power_setup(void) {
     if (i2c_master_probe(bus_handle, target_addr, 200) != ESP_OK) {
         ESP_LOGE("M5PM1", "M5PM1 not at 0x6E. Check scan output above for the correct address.");
         i2c_del_master_bus(bus_handle);
-        return;
+        return ESP_FAIL;
     }
     ESP_LOGI("M5PM1", "M5PM1 confirmed at 0x%02X", target_addr);
 
@@ -109,6 +109,7 @@ void m5pm1_new_api_power_setup(void) {
     ESP_ERROR_CHECK(i2c_del_master_bus(bus_handle));
 
     ESP_LOGI("M5PM1", "M5PM1 power setup complete! Bus released.");
+    return ESP_OK;
 }
 
 static esp_err_t es8311_codec_init(void)
@@ -201,6 +202,8 @@ static esp_err_t es8311_codec_init(void)
 static esp_err_t i2s_driver_init(void)
 {
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM, I2S_ROLE_MASTER);
+    chan_cfg.dma_desc_num = 8;
+    chan_cfg.dma_frame_num = 1023;
     chan_cfg.auto_clear = true; // Auto clear the legacy data in the DMA buffer
     ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &tx_handle, &rx_handle));
     i2s_std_config_t std_cfg = {
@@ -307,14 +310,10 @@ void app_main(void)
     /* Step 1: MUST BE FIRST - Power up M5PM1 (5V boost + codec + amplifier wake)
      * Uses a self-contained temporary I2C bus that is fully deleted before
      * the ES8311 driver claims the same pins. */
-    m5pm1_new_api_power_setup();
-
-    /* Step 2: Disable sleep multiplexing on I2S pins so they stay active in light sleep */
-    gpio_sleep_sel_dis(18);  /* MCLK */
-    gpio_sleep_sel_dis(17);  /* BCLK */
-    gpio_sleep_sel_dis(15);  /* LRCK / WS */
-    gpio_sleep_sel_dis(16);  /* DOUT - ESP32 → Codec */
-    gpio_sleep_sel_dis(14);  /* DIN  - Codec → ESP32 */
+    if (m5pm1_new_api_power_setup() != ESP_OK) {
+        ESP_LOGE(TAG, "M5PM1 power setup failed; aborting to avoid speaker buzz");
+        abort();
+    }
 
     /* Step 3: Initialize I2S */
     if (i2s_driver_init() != ESP_OK) {
