@@ -9,7 +9,7 @@
 #define HDR_H       20    /* header bar height      */
 #define FOOTER_H    20    /* footer bar height       */
 #define STATUS_H    16    /* status line below footer*/
-#define ITEM_H      22    /* height per menu row     */
+#define ITEM_H      20    /* height per menu row     */
 #define ITEM_PAD_X   6    /* left text indent        */
 
 #define ITEMS_Y     (HDR_H + 1)

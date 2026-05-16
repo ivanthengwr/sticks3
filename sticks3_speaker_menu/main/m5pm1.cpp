@@ -64,9 +64,16 @@ extern "C" esp_err_t m5pm1_init(void)
     ESP_RETURN_ON_ERROR(pm1_to_esp(s_pm1.gpioSetDrive(M5PM1_GPIO_NUM_2, M5PM1_GPIO_DRIVE_PUSHPULL)), TAG, "configure L3B driver failed");
     ESP_RETURN_ON_ERROR(pm1_to_esp(s_pm1.gpioSetOutput(M5PM1_GPIO_NUM_2, true)), TAG, "enable L3B failed");
     ESP_RETURN_ON_ERROR(m5pm1_speaker_enable(true), TAG, "enable speaker amp failed");
+
+    /* Enable the Grove 5 V rail. On the StickS3 the PMIC routes Grove power
+     * through the DCDC converter; BOOST_EN and DCDC_EN are both "hardware
+     * dependent" per the register map so we enable all three paths. */
+    ESP_RETURN_ON_ERROR(pm1_to_esp(s_pm1.setDcdcEnable(true)),     TAG, "enable Grove 5V DCDC failed");
+    ESP_RETURN_ON_ERROR(pm1_to_esp(s_pm1.setBoostEnable(true)),    TAG, "enable Grove 5V boost failed");
+    ESP_RETURN_ON_ERROR(pm1_to_esp(s_pm1.boostSetPowerHold(true)), TAG, "latch Grove 5V boost failed");
     vTaskDelay(pdMS_TO_TICKS(20));
 
-    ESP_LOGI(TAG, "I2C bus ready and speaker amp enabled");
+    ESP_LOGI(TAG, "I2C bus ready, speaker amp enabled, Grove 5V ON");
     return ESP_OK;
 }
 

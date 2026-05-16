@@ -36,9 +36,19 @@
 /* PYG3_SPK_Pulse (SHDN of AW8737) is driven by PMIC – see m5pm1.c          */
 
 /* ── Buttons ──────────────────────────────────────────────────────────────── */
-#define BTN_KEY1_GPIO   11      /* navigate / next item (active-low)        */
-#define BTN_KEY2_GPIO   12      /* select / confirm     (active-low)        */
+#define BTN_KEY1_GPIO   12      /* navigate / next item (active-low)        */
+#define BTN_KEY2_GPIO   11      /* select / confirm     (active-low)        */
 
 /* ── IR (not used in this demo, defined for reference) ───────────────────── */
 #define IR_TX_GPIO      46
 #define IR_RX_GPIO      42
+
+/* ── Unit Watering (M5Stack SKU U101, Grove HY2.0-4P) ────────────────────── */
+/* Grove port wiring:  GND=black, 5V=red, PUMP_EN=yellow, ADC_OUT=white       */
+/* Connect Grove cable to the StickS3 Grove header (Port A or breakout pins)  */
+#define WATERING_ADC_GPIO   10       /* white wire – capacitive moisture ADC   */
+#define WATERING_PUMP_GPIO  9        /* yellow wire – pump enable (active-high) */
+#define WATERING_DRY_THRESHOLD  3000  /* raw ADC counts: above = soil dry      */
+#define WATERING_PUMP_ON_MS  3000   /* pump run time per demo cycle (ms)      */
+#define WATERING_MEASURE_MS   500   /* sensor read interval during demo (ms)  */
+#define WATERING_DEMO_CYCLES    5   /* number of sense→pump cycles in demo    */

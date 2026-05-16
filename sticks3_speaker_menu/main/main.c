@@ -11,6 +11,7 @@
 #include "es8311.h"
 #include "m5pm1.h"
 #include "audio.h"
+#include "watering.h"
 
 static const char *TAG = "main";
 
@@ -23,10 +24,11 @@ static const char *TAG = "main";
 #define ITEM_VOL_UP     5
 #define ITEM_VOL_DOWN   6
 #define ITEM_STOP       7
+#define ITEM_WATERING   8
 
 static gui_menu_t s_menu = {
     .title    = "StickS3",
-    .count    = 8,
+    .count    = 9,
     .selected = 0,
     .vol_pct  = 60,
     .status_str = "Ready",
@@ -39,11 +41,13 @@ static gui_menu_t s_menu = {
         [ITEM_VOL_UP]   = {"Vol  +",   COLOR_LTGRAY },
         [ITEM_VOL_DOWN] = {"Vol  -",   COLOR_LTGRAY },
         [ITEM_STOP]     = {"Stop",     COLOR_RED    },
+        [ITEM_WATERING] = {"Watering", COLOR_GREEN  },
     },
 };
 
 /* ── Button debounce ─────────────────────────────────────────────────────── */
-#define DEBOUNCE_MS 50
+#define DEBOUNCE_MS      50
+#define DOUBLE_TAP_MS   300   /* window to detect a second KEY1 press */
 
 static bool btn_pressed(int gpio)
 {
@@ -57,6 +61,24 @@ static void wait_release(int gpio)
     while (gpio_get_level(gpio) == 0) vTaskDelay(pdMS_TO_TICKS(10));
 }
 
+/* Returns 1 for single tap (go down), -1 for double-tap (go up). */
+static int key1_tap_type(void)
+{
+    wait_release(BTN_KEY1_GPIO);
+
+    /* Wait up to DOUBLE_TAP_MS for a second press */
+    int elapsed = 0;
+    while (elapsed < DOUBLE_TAP_MS) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+        elapsed += 10;
+        if (btn_pressed(BTN_KEY1_GPIO)) {
+            wait_release(BTN_KEY1_GPIO);
+            return -1;   /* double-tap → go up */
+        }
+    }
+    return 1;            /* single tap → go down */
+}
+
 /* ── Button GPIO init ────────────────────────────────────────────────────── */
 static void buttons_init(void)
 {
@@ -68,6 +90,16 @@ static void buttons_init(void)
         .intr_type    = GPIO_INTR_DISABLE,
     };
     gpio_config(&io);
+}
+
+/* ── Watering demo status callback ──────────────────────────────────────── */
+static gui_menu_t *s_watering_menu_ref;   /* set before demo runs */
+
+static void watering_status_update(const char *msg)
+{
+    if (s_watering_menu_ref) {
+        gui_menu_set_status(s_watering_menu_ref, msg);
+    }
 }
 
 /* ── Action handler ──────────────────────────────────────────────────────── */
@@ -137,7 +169,19 @@ static void handle_select(gui_menu_t *m)
 
     case ITEM_STOP:
         audio_stop();
+        watering_demo_stop();
         gui_menu_set_status(m, "Stopped");
+        break;
+
+    case ITEM_WATERING:
+        if (watering_demo_running()) {
+            watering_demo_stop();
+            gui_menu_set_status(m, "Demo stopped");
+        } else {
+            s_watering_menu_ref = m;
+            watering_demo_start(watering_status_update);
+            gui_menu_set_status(m, "Demo running");
+        }
         break;
     }
 }
@@ -163,7 +207,10 @@ void app_main(void)
     /* 5. Buttons */
     buttons_init();
 
-    /* 6. Draw initial menu */
+    /* 6. Watering unit (ADC + pump GPIO) */
+    ESP_ERROR_CHECK(watering_init());
+
+    /* 7. Draw initial menu */
     gui_menu_draw(&s_menu);
 
     ESP_LOGI(TAG, "Init complete – entering UI loop");
@@ -178,13 +225,11 @@ void app_main(void)
 
     /* ── Main loop ───────────────────────────────────────────────────────── */
     for (;;) {
-        /* KEY1 – navigate to next menu item */
+        /* KEY1 – single tap: down, double-tap: up */
         if (btn_pressed(BTN_KEY1_GPIO)) {
-            wait_release(BTN_KEY1_GPIO);
+            int dir = key1_tap_type();
             uint8_t old = s_menu.selected;
-            s_menu.selected = (s_menu.selected + 1) % s_menu.count;
-
-            /* Redraw just the two changed rows for speed */
+            s_menu.selected = (uint8_t)((s_menu.selected + s_menu.count + dir) % s_menu.count);
             gui_menu_update_row(&s_menu, old, false);
             gui_menu_update_row(&s_menu, s_menu.selected, false);
         }

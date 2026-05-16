@@ -5,10 +5,17 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include <string.h>
 
 static const char *TAG = "st7789";
 static spi_device_handle_t s_spi;
+static SemaphoreHandle_t   s_lcd_mutex;
+
+#define LCD_LOCK()   xSemaphoreTake(s_lcd_mutex, portMAX_DELAY)
+#define LCD_UNLOCK() xSemaphoreGive(s_lcd_mutex)
+
+static void st7789_fill_rect_unsafe(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
 
 /* ── ST7789 command set ──────────────────────────────────────────────────── */
 #define ST7789_NOP      0x00
@@ -107,6 +114,8 @@ esp_err_t st7789_init(void)
     };
     ESP_ERROR_CHECK(spi_bus_add_device(LCD_SPI_HOST, &dev, &s_spi));
 
+    s_lcd_mutex = xSemaphoreCreateMutex();
+
     /* Hardware reset */
     gpio_set_level(LCD_RST_GPIO, 0);
     vTaskDelay(pdMS_TO_TICKS(10));
@@ -163,17 +172,19 @@ void st7789_set_backlight(bool on)
 
 void st7789_fill(uint16_t color)
 {
-    st7789_fill_rect(0, 0, LCD_WIDTH, LCD_HEIGHT, color);
+    LCD_LOCK();
+    st7789_fill_rect_unsafe(0, 0, LCD_WIDTH, LCD_HEIGHT, color);
+    LCD_UNLOCK();
 }
 
-void st7789_fill_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color)
+/* Internal unlocked fill used by fill() and fill_rect() under the same lock */
+static void st7789_fill_rect_unsafe(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color)
 {
     if (w <= 0 || h <= 0) return;
     set_window(x, y, x + w - 1, y + h - 1);
 
-    /* Build a line buffer in DMA-capable memory and stream it */
     static uint16_t line[LCD_WIDTH];
-    uint16_t swapped = (color >> 8) | (color << 8);  /* big-endian */
+    uint16_t swapped = (color >> 8) | (color << 8);
     for (int i = 0; i < w && i < LCD_WIDTH; i++) line[i] = swapped;
 
     gpio_set_level(LCD_DC_GPIO, 1);
@@ -183,27 +194,42 @@ void st7789_fill_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color
     }
 }
 
+void st7789_fill_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color)
+{
+    LCD_LOCK();
+    st7789_fill_rect_unsafe(x, y, w, h, color);
+    LCD_UNLOCK();
+}
+
 void st7789_draw_pixel(int16_t x, int16_t y, uint16_t color)
 {
+    LCD_LOCK();
     set_window(x, y, x, y);
     uint8_t buf[2] = {color >> 8, color & 0xFF};
     lcd_data(buf, 2);
+    LCD_UNLOCK();
 }
 
 void st7789_draw_hline(int16_t x, int16_t y, int16_t len, uint16_t color)
 {
-    st7789_fill_rect(x, y, len, 1, color);
+    LCD_LOCK();
+    st7789_fill_rect_unsafe(x, y, len, 1, color);
+    LCD_UNLOCK();
 }
 
 void st7789_draw_vline(int16_t x, int16_t y, int16_t len, uint16_t color)
 {
-    st7789_fill_rect(x, y, 1, len, color);
+    LCD_LOCK();
+    st7789_fill_rect_unsafe(x, y, 1, len, color);
+    LCD_UNLOCK();
 }
 
 void st7789_draw_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color)
 {
-    st7789_draw_hline(x,         y,         w, color);
-    st7789_draw_hline(x,         y + h - 1, w, color);
-    st7789_draw_vline(x,         y,         h, color);
-    st7789_draw_vline(x + w - 1, y,         h, color);
+    LCD_LOCK();
+    st7789_fill_rect_unsafe(x,         y,         w, 1, color);
+    st7789_fill_rect_unsafe(x,         y + h - 1, w, 1, color);
+    st7789_fill_rect_unsafe(x,         y,         1, h, color);
+    st7789_fill_rect_unsafe(x + w - 1, y,         1, h, color);
+    LCD_UNLOCK();
 }

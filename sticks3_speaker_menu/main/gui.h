@@ -12,7 +12,7 @@ void gui_draw_vol_bar(int16_t x, int16_t y, int16_t w, int16_t h,
                       uint8_t pct, uint16_t fill_color, uint16_t bg_color);
 
 /* ── Full-screen menu ────────────────────────────────────────────────────── */
-#define GUI_MAX_ITEMS 8
+#define GUI_MAX_ITEMS 9
 
 typedef struct {
     const char *label;      /* text shown in the menu row */

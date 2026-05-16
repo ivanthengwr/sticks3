@@ -6,9 +6,11 @@ idf_component_register(
         "es8311.c"
         "m5pm1.cpp"
         "audio.c"
+        "watering.c"
     INCLUDE_DIRS "."
     REQUIRES
         driver
+        esp_adc
         esp_driver_i2c
         esp_timer
         freertos
