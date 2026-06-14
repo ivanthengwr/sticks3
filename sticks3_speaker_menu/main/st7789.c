@@ -233,3 +233,32 @@ void st7789_draw_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color
     st7789_fill_rect_unsafe(x + w - 1, y,         1, h, color);
     LCD_UNLOCK();
 }
+
+void st7789_draw_bitmap(int16_t x, int16_t y, int16_t w, int16_t h, const uint16_t *pixels)
+{
+    if (!pixels || w <= 0 || h <= 0) {
+        return;
+    }
+
+    LCD_LOCK();
+    set_window(x, y, x + w - 1, y + h - 1);
+
+    static uint8_t line_buf[LCD_WIDTH * 2];
+    gpio_set_level(LCD_DC_GPIO, 1);
+
+    for (int16_t row = 0; row < h; row++) {
+        const uint16_t *row_pixels = pixels + (size_t)row * (size_t)w;
+        for (int16_t col = 0; col < w; col++) {
+            uint16_t color = row_pixels[col];
+            line_buf[(size_t)col * 2]     = (uint8_t)(color >> 8);
+            line_buf[(size_t)col * 2 + 1] = (uint8_t)(color & 0xFF);
+        }
+        spi_transaction_t t = {
+            .length = (size_t)w * 16,
+            .tx_buffer = line_buf,
+        };
+        spi_device_polling_transmit(s_spi, &t);
+    }
+
+    LCD_UNLOCK();
+}

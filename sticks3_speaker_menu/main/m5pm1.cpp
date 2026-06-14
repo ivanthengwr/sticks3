@@ -1,7 +1,6 @@
-#include "m5pm1.h"
-#include "pin_config.h"
-
 #include "M5PM1.h"
+#include "sticks_pm1.h"
+#include "pin_config.h"
 #include "driver/i2c_master.h"
 #include "esp_check.h"
 #include "esp_log.h"
@@ -65,16 +64,39 @@ extern "C" esp_err_t m5pm1_init(void)
     ESP_RETURN_ON_ERROR(pm1_to_esp(s_pm1.gpioSetOutput(M5PM1_GPIO_NUM_2, true)), TAG, "enable L3B failed");
     ESP_RETURN_ON_ERROR(m5pm1_speaker_enable(true), TAG, "enable speaker amp failed");
 
-    /* Enable the Grove 5 V rail. On the StickS3 the PMIC routes Grove power
-     * through the DCDC converter; BOOST_EN and DCDC_EN are both "hardware
-     * dependent" per the register map so we enable all three paths. */
-    ESP_RETURN_ON_ERROR(pm1_to_esp(s_pm1.setDcdcEnable(true)),     TAG, "enable Grove 5V DCDC failed");
-    ESP_RETURN_ON_ERROR(pm1_to_esp(s_pm1.setBoostEnable(true)),    TAG, "enable Grove 5V boost failed");
-    ESP_RETURN_ON_ERROR(pm1_to_esp(s_pm1.boostSetPowerHold(true)), TAG, "latch Grove 5V boost failed");
-    vTaskDelay(pdMS_TO_TICKS(20));
-
-    ESP_LOGI(TAG, "I2C bus ready, speaker amp enabled, Grove 5V ON");
+    /* Grove 5 V enabled on demand during watering demo (saves USB headroom). */
+    ESP_LOGI(TAG, "I2C bus ready, speaker amp enabled");
     return ESP_OK;
+}
+
+extern "C" esp_err_t m5pm1_grove_5v_enable(bool en)
+{
+    if (!s_pm1_ready) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (en) {
+        esp_err_t ret = pm1_to_esp(s_pm1.setDcdcEnable(true));
+        if (ret != ESP_OK) {
+            return ret;
+        }
+        ret = pm1_to_esp(s_pm1.setBoostEnable(true));
+        if (ret != ESP_OK) {
+            return ret;
+        }
+        ret = pm1_to_esp(s_pm1.boostSetPowerHold(true));
+        if (ret != ESP_OK) {
+            return ret;
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+        return ESP_OK;
+    }
+
+    /* Only drop boost — disabling DCDC glitches VBUS and resets the SoC on StickS3. */
+    esp_err_t ret = pm1_to_esp(s_pm1.boostSetPowerHold(false));
+    if (ret != ESP_OK) {
+        return ret;
+    }
+    return pm1_to_esp(s_pm1.setBoostEnable(false));
 }
 
 extern "C" esp_err_t m5pm1_write_reg(uint8_t reg, uint8_t val)

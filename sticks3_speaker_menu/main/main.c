@@ -9,7 +9,7 @@
 #include "st7789.h"
 #include "gui.h"
 #include "es8311.h"
-#include "m5pm1.h"
+#include "sticks_pm1.h"
 #include "audio.h"
 #include "watering.h"
 
@@ -23,25 +23,23 @@ static const char *TAG = "main";
 #define ITEM_PLAYBACK   4
 #define ITEM_VOL_UP     5
 #define ITEM_VOL_DOWN   6
-#define ITEM_STOP       7
-#define ITEM_WATERING   8
+#define ITEM_WATERING   7
 
 static gui_menu_t s_menu = {
     .title    = "StickS3",
-    .count    = 9,
+    .count    = 8,
     .selected = 0,
-    .vol_pct  = 60,
+    .vol_pct  = 80,
     .status_str = "Ready",
     .items = {
-        [ITEM_TONE_A4]  = {"Tone A4",  COLOR_CYAN   },
-        [ITEM_TONE_C5]  = {"Tone C5",  COLOR_CYAN   },
-        [ITEM_SCALE]    = {"Scale",    COLOR_GREEN  },
-        [ITEM_RECORD]   = {"Record",   COLOR_ORANGE },
-        [ITEM_PLAYBACK] = {"Playback", COLOR_YELLOW },
-        [ITEM_VOL_UP]   = {"Vol  +",   COLOR_LTGRAY },
-        [ITEM_VOL_DOWN] = {"Vol  -",   COLOR_LTGRAY },
-        [ITEM_STOP]     = {"Stop",     COLOR_RED    },
-        [ITEM_WATERING] = {"Watering", COLOR_GREEN  },
+        [ITEM_TONE_A4]  = {"Tone A4",  COLOR_CYAN,   GUI_ICON_NOTE   },
+        [ITEM_TONE_C5]  = {"Tone C5",  COLOR_CYAN,   GUI_ICON_NOTE   },
+        [ITEM_SCALE]    = {"Scale",    COLOR_GREEN,  GUI_ICON_SCALE  },
+        [ITEM_RECORD]   = {"Record",   COLOR_ORANGE, GUI_ICON_RECORD },
+        [ITEM_PLAYBACK] = {"Playback", COLOR_YELLOW, GUI_ICON_PLAY   },
+        [ITEM_VOL_UP]   = {"Vol  +",   COLOR_LTGRAY, GUI_ICON_VOL_UP },
+        [ITEM_VOL_DOWN] = {"Vol  -",   COLOR_LTGRAY, GUI_ICON_VOL_DOWN },
+        [ITEM_WATERING] = {"Watering", COLOR_GREEN,  GUI_ICON_WATER  },
     },
 };
 
@@ -61,22 +59,21 @@ static void wait_release(int gpio)
     while (gpio_get_level(gpio) == 0) vTaskDelay(pdMS_TO_TICKS(10));
 }
 
-/* Returns 1 for single tap (go down), -1 for double-tap (go up). */
+/* Returns 1 for single tap (previous), 2 for double-tap (next item). */
 static int key1_tap_type(void)
 {
     wait_release(BTN_KEY1_GPIO);
 
-    /* Wait up to DOUBLE_TAP_MS for a second press */
     int elapsed = 0;
     while (elapsed < DOUBLE_TAP_MS) {
         vTaskDelay(pdMS_TO_TICKS(10));
         elapsed += 10;
         if (btn_pressed(BTN_KEY1_GPIO)) {
             wait_release(BTN_KEY1_GPIO);
-            return -1;   /* double-tap → go up */
+            return 2;   /* double-tap → next */
         }
     }
-    return 1;            /* single tap → go down */
+    return 1;         /* single tap → previous */
 }
 
 /* ── Button GPIO init ────────────────────────────────────────────────────── */
@@ -94,11 +91,59 @@ static void buttons_init(void)
 
 /* ── Watering demo status callback ──────────────────────────────────────── */
 static gui_menu_t *s_watering_menu_ref;   /* set before demo runs */
+static gui_menu_t *s_record_menu_ref;
+
+static volatile uint8_t s_rec_countdown_sec   = 0;
+static volatile bool    s_rec_countdown_dirty = false;
+static volatile bool    s_rec_done_pending    = false;
+static volatile bool    s_rec_done_ok           = false;
+static uint8_t            s_rec_countdown_drawn = 255;
 
 static void watering_status_update(const char *msg)
 {
     if (s_watering_menu_ref) {
         gui_menu_set_status(s_watering_menu_ref, msg);
+    }
+}
+
+static void record_countdown_tick(uint8_t seconds_left)
+{
+    s_rec_countdown_sec   = seconds_left;
+    s_rec_countdown_dirty = true;
+}
+
+static void record_finished(bool ok)
+{
+    s_rec_done_ok       = ok;
+    s_rec_done_pending  = true;
+}
+
+static void record_poll_ui(void)
+{
+    if (s_rec_countdown_dirty && s_rec_countdown_sec != s_rec_countdown_drawn) {
+        s_rec_countdown_dirty = false;
+        s_rec_countdown_drawn = s_rec_countdown_sec;
+        if (s_record_menu_ref) {
+            gui_record_countdown_update(s_record_menu_ref, s_rec_countdown_sec);
+        }
+    }
+}
+
+static void record_handle_done(void)
+{
+    gui_menu_t *m = s_record_menu_ref;
+    if (!m) {
+        return;
+    }
+
+    s_record_menu_ref       = NULL;
+    s_rec_countdown_drawn   = 255;
+    gui_record_countdown_clear(m);
+    if (s_rec_done_ok) {
+        audio_play_recording_done_voice(m->vol_pct);
+        gui_menu_set_status(m, "Rec done");
+    } else {
+        gui_menu_set_status(m, "Rec failed");
     }
 }
 
@@ -134,9 +179,17 @@ static void handle_select(gui_menu_t *m)
         break;
 
     case ITEM_RECORD:
-        gui_menu_set_status(m, "Recording 3s…");
-        audio_record_start(3000);
-        gui_menu_set_status(m, "Rec done");
+        if (audio_record_busy()) {
+            break;
+        }
+        s_record_menu_ref       = m;
+        s_rec_countdown_sec     = RECORD_DURATION_MS / 1000;
+        s_rec_countdown_drawn   = 255;
+        s_rec_countdown_dirty   = true;
+        s_rec_done_pending      = false;
+        gui_record_countdown_update(m, s_rec_countdown_sec);
+        s_rec_countdown_drawn = s_rec_countdown_sec;
+        audio_record_start_async(RECORD_DURATION_MS, record_countdown_tick, record_finished);
         break;
 
     case ITEM_PLAYBACK:
@@ -151,7 +204,7 @@ static void handle_select(gui_menu_t *m)
         break;
 
     case ITEM_VOL_UP:
-        if (m->vol_pct < 75) m->vol_pct += 5;  /* cap at 75% on battery */
+        if (m->vol_pct < 100) m->vol_pct += 5;
         snprintf(status, sizeof(status), "Vol: %d%%", m->vol_pct);
         gui_menu_set_status(m, status);
         es8311_set_volume(m->vol_pct);
@@ -165,12 +218,6 @@ static void handle_select(gui_menu_t *m)
         gui_menu_set_status(m, status);
         es8311_set_volume(m->vol_pct);
         gui_menu_draw(m);
-        break;
-
-    case ITEM_STOP:
-        audio_stop();
-        watering_demo_stop();
-        gui_menu_set_status(m, "Stopped");
         break;
 
     case ITEM_WATERING:
@@ -199,45 +246,53 @@ void app_main(void)
 
     /* 3. ES8311 codec — opens esp_codec_dev which enables I2S channels */
     ESP_ERROR_CHECK(es8311_init());
-    ESP_ERROR_CHECK(es8311_set_volume(60));
+    ESP_ERROR_CHECK(es8311_set_volume(80));
+    ESP_ERROR_CHECK(audio_warmup_output());
 
     /* 4. SPI LCD */
     ESP_ERROR_CHECK(st7789_init());
 
-    /* 5. Buttons */
+    /* 5. Startup splash — STACKUP logo + welcome voice */
+    gui_show_startup_splash();
+    audio_play_welcome_stackup_voice(s_menu.vol_pct);
+    vTaskDelay(pdMS_TO_TICKS(STARTUP_SPLASH_MS));
+
+    /* 6. Buttons */
     buttons_init();
 
-    /* 6. Watering unit (ADC + pump GPIO) */
+    /* 7. Watering unit (ADC + pump GPIO) */
     ESP_ERROR_CHECK(watering_init());
 
-    /* 7. Draw initial menu */
+    /* 8. Draw menu */
     gui_menu_draw(&s_menu);
 
     ESP_LOGI(TAG, "Init complete – entering UI loop");
-
-    /* Startup beep – two short tones to confirm audio path is alive */
-    es8311_set_volume(100);
-    audio_play_tone(880, 200, 100);
-    vTaskDelay(pdMS_TO_TICKS(50));
-    audio_play_tone(1046, 200, 100);
 
     gui_menu_set_status(&s_menu, "Ready");
 
     /* ── Main loop ───────────────────────────────────────────────────────── */
     for (;;) {
-        /* KEY1 – single tap: down, double-tap: up */
-        if (btn_pressed(BTN_KEY1_GPIO)) {
-            int dir = key1_tap_type();
-            uint8_t old = s_menu.selected;
-            s_menu.selected = (uint8_t)((s_menu.selected + s_menu.count + dir) % s_menu.count);
-            gui_menu_update_row(&s_menu, old, false);
-            gui_menu_update_row(&s_menu, s_menu.selected, false);
-        }
+        if (audio_record_busy()) {
+            record_poll_ui();
+        } else if (s_rec_done_pending) {
+            s_rec_done_pending = false;
+            record_handle_done();
+        } else {
+            /* KEY1 – single tap: previous, double-tap: next */
+            if (btn_pressed(BTN_KEY1_GPIO)) {
+                int action = key1_tap_type();
+                if (action == 2) {
+                    gui_menu_navigate(&s_menu, 1);
+                } else {
+                    gui_menu_navigate(&s_menu, -1);
+                }
+            }
 
-        /* KEY2 – select / execute */
-        if (btn_pressed(BTN_KEY2_GPIO)) {
-            wait_release(BTN_KEY2_GPIO);
-            handle_select(&s_menu);
+            /* KEY2 – single tap: enter / start selected option */
+            if (btn_pressed(BTN_KEY2_GPIO)) {
+                wait_release(BTN_KEY2_GPIO);
+                handle_select(&s_menu);
+            }
         }
 
         vTaskDelay(pdMS_TO_TICKS(20));

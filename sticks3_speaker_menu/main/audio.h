@@ -1,5 +1,6 @@
 #pragma once
 #include "esp_err.h"
+#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -19,12 +20,23 @@
 
 /* ── Tone playback ───────────────────────────────────────────────────────── */
 esp_err_t audio_init(void);
+esp_err_t audio_warmup_output(void);
 esp_err_t audio_play_tone(uint16_t freq_hz, uint32_t duration_ms, uint8_t vol_pct);
 esp_err_t audio_play_scale(uint8_t vol_pct);   /* C-major ascending scale   */
+esp_err_t audio_play_pcm(const int16_t *samples, size_t sample_count, uint8_t vol_pct);
 esp_err_t audio_stop(void);
 
 /* ── Mic recording / playback ────────────────────────────────────────────── */
-esp_err_t audio_record_start(uint32_t duration_ms);   /* captures to PSRAM  */
+typedef void (*audio_record_tick_cb_t)(uint8_t seconds_left);
+typedef void (*audio_record_done_cb_t)(bool ok);
+
+esp_err_t audio_record_start(uint32_t duration_ms);   /* blocking capture    */
+void      audio_record_start_async(uint32_t duration_ms,
+                                   audio_record_tick_cb_t tick_cb,
+                                   audio_record_done_cb_t done_cb);
+bool      audio_record_busy(void);
+void      audio_play_recording_done_voice(uint8_t vol_pct);
+void      audio_play_welcome_stackup_voice(uint8_t vol_pct);
 esp_err_t audio_playback_recorded(uint8_t vol_pct);   /* plays back buffer  */
 
 bool      audio_is_playing(void);

@@ -5,7 +5,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "m5pm1.h"
+#include "sticks_pm1.h"
 
 #include "esp_codec_dev.h"
 #include "es8311_codec.h"
@@ -103,6 +103,7 @@ esp_err_t es8311_init(void)
         ESP_LOGE(TAG, "Failed to create codec dev");
         return ESP_FAIL;
     }
+    esp_codec_set_disable_when_closed(s_codec_dev, false);
 
     ESP_LOGI(TAG, "ES8311 init OK via esp_codec_dev (16 kHz, 16-bit, slave)");
     return ESP_OK;

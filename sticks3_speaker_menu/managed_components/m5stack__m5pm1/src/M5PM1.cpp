@@ -7,6 +7,7 @@
 #include "M5PM1.h"
 #include <string.h>
 #include <stdio.h>
+#include <inttypes.h>
 
 static const char* TAG      = "M5PM1";       // 保留用于 setLogLevel 等极少数场景
 static const char* TAG_I2C  = "M5PM1_I2C";   // I2C 总线初始化、底层读写、I2C 配置
@@ -282,8 +283,9 @@ m5pm1_err_t M5PM1::begin(TwoWire* wire, uint8_t addr, int8_t sda, int8_t scl, ui
     // Step 1: Validate requested speed and store it
     if (!_isValidI2cFrequency(speed)) {
         M5PM1_LOG_W(TAG_I2C,
-                    "Invalid I2C frequency: %lu Hz. PM1 only supports 100KHz or 400KHz. Falling back to 100KHz.",
-                    (unsigned long)speed);
+                    "Invalid I2C frequency: %" PRIu32
+                    " Hz. PM1 only supports 100KHz or 400KHz. Falling back to 100KHz.",
+                    speed);
         _requestedSpeed = M5PM1_I2C_FREQ_100K;
     } else {
         _requestedSpeed = speed;
@@ -353,7 +355,7 @@ m5pm1_err_t M5PM1::begin(TwoWire* wire, uint8_t addr, int8_t sda, int8_t scl, ui
     _wire->end();
     M5PM1_DELAY_MS(10);
     if (!_wire->begin(_sda, _scl, _requestedSpeed)) {
-        M5PM1_LOG_E(TAG_I2C, "Failed to switch host to %lu Hz", (unsigned long)_requestedSpeed);
+        M5PM1_LOG_E(TAG_I2C, "Failed to switch host to %" PRIu32 " Hz", _requestedSpeed);
         _initialized = false;
         return M5PM1_ERR_I2C_CONFIG;
     }
@@ -369,7 +371,7 @@ m5pm1_err_t M5PM1::begin(TwoWire* wire, uint8_t addr, int8_t sda, int8_t scl, ui
         M5PM1_LOG_D(TAG_I2C, "Snapshot completed successfully");
     }
 
-    M5PM1_LOG_I(TAG_I2C, "M5PM1 initialized at address 0x%02X (I2C: %lu Hz)", _addr, (unsigned long)_requestedSpeed);
+    M5PM1_LOG_I(TAG_I2C, "M5PM1 initialized at address 0x%02X (I2C: %" PRIu32 " Hz)", _addr, _requestedSpeed);
     return M5PM1_OK;
 }
 
@@ -390,7 +392,7 @@ m5pm1_err_t M5PM1::begin(m5::I2C_Class* i2c, uint8_t addr, uint32_t speed)
     // 步骤1：校验用户频率并记录
     // Step 1: Validate requested speed
     if (!_isValidI2cFrequency(speed)) {
-        M5PM1_LOG_W(TAG_I2C, "Invalid I2C frequency: %lu Hz. Falling back to 100KHz.", (unsigned long)speed);
+        M5PM1_LOG_W(TAG_I2C, "Invalid I2C frequency: %" PRIu32 " Hz. Falling back to 100KHz.", speed);
         _requestedSpeed = M5PM1_I2C_FREQ_100K;
     } else {
         _requestedSpeed = speed;
@@ -448,7 +450,7 @@ m5pm1_err_t M5PM1::begin(m5::I2C_Class* i2c, uint8_t addr, uint32_t speed)
     }
 
     _initialized = true;
-    M5PM1_LOG_I(TAG_I2C, "M5PM1 initialized at address 0x%02X (I2C: %lu Hz)", _addr, (unsigned long)_requestedSpeed);
+    M5PM1_LOG_I(TAG_I2C, "M5PM1 initialized at address 0x%02X (I2C: %" PRIu32 " Hz)", _addr, _requestedSpeed);
     return M5PM1_OK;
 }
 #endif  // M5PM1_HAS_M5UNIFIED_I2C
@@ -467,8 +469,9 @@ m5pm1_err_t M5PM1::begin(i2c_port_t port, uint8_t addr, int sda, int scl, uint32
     // Step 1: Validate requested speed and store it
     if (!_isValidI2cFrequency(speed)) {
         M5PM1_LOG_W(TAG_I2C,
-                    "Invalid I2C frequency: %lu Hz. PM1 only supports 100KHz or 400KHz. Falling back to 100KHz.",
-                    (unsigned long)speed);
+                    "Invalid I2C frequency: %" PRIu32
+                    " Hz. PM1 only supports 100KHz or 400KHz. Falling back to 100KHz.",
+                    speed);
         _requestedSpeed = M5PM1_I2C_FREQ_100K;
     } else {
         _requestedSpeed = speed;
@@ -490,7 +493,9 @@ m5pm1_err_t M5PM1::begin(i2c_port_t port, uint8_t addr, int sda, int scl, uint32
         .flags =
             {
                 .enable_internal_pullup = true,
-                .allow_pd               = false,
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
+                .allow_pd = false,
+#endif
             },
     };
 
@@ -590,8 +595,7 @@ m5pm1_err_t M5PM1::begin(i2c_port_t port, uint8_t addr, int sda, int scl, uint32
     dev_config.scl_speed_hz = _requestedSpeed;
     ret                     = i2c_master_bus_add_device(_i2c_master_bus, &dev_config, &_i2c_master_dev);
     if (ret != ESP_OK) {
-        M5PM1_LOG_E(TAG_I2C, "Failed to switch device to %lu Hz: %s", (unsigned long)_requestedSpeed,
-                    esp_err_to_name(ret));
+        M5PM1_LOG_E(TAG_I2C, "Failed to switch device to %" PRIu32 " Hz: %s", _requestedSpeed, esp_err_to_name(ret));
         i2c_del_master_bus(_i2c_master_bus);
         _i2c_master_bus = nullptr;
         _initialized    = false;
@@ -609,7 +613,7 @@ m5pm1_err_t M5PM1::begin(i2c_port_t port, uint8_t addr, int sda, int scl, uint32
     }
 
     _initialized = true;
-    M5PM1_LOG_I(TAG_I2C, "M5PM1 initialized at address 0x%02X (I2C: %lu Hz)", _addr, (unsigned long)_requestedSpeed);
+    M5PM1_LOG_I(TAG_I2C, "M5PM1 initialized at address 0x%02X (I2C: %" PRIu32 " Hz)", _addr, _requestedSpeed);
     return M5PM1_OK;
 
 #else   // !M5PM1_HAS_I2C_MASTER — 传统 driver/i2c.h 路径 / Legacy driver/i2c.h path
@@ -725,7 +729,7 @@ m5pm1_err_t M5PM1::begin(i2c_port_t port, uint8_t addr, int sda, int scl, uint32
     }
 
     _initialized = true;
-    M5PM1_LOG_I(TAG_I2C, "M5PM1 initialized at address 0x%02X (I2C: %lu Hz)", _addr, (unsigned long)_requestedSpeed);
+    M5PM1_LOG_I(TAG_I2C, "M5PM1 initialized at address 0x%02X (I2C: %" PRIu32 " Hz)", _addr, _requestedSpeed);
     return M5PM1_OK;
 #endif  // M5PM1_HAS_I2C_MASTER
 }
@@ -742,8 +746,9 @@ m5pm1_err_t M5PM1::begin(i2c_master_bus_handle_t bus, uint8_t addr, uint32_t spe
     // Step 1: Validate requested speed and store it
     if (!_isValidI2cFrequency(speed)) {
         M5PM1_LOG_W(TAG_I2C,
-                    "Invalid I2C frequency: %lu Hz. PM1 only supports 100KHz or 400KHz. Falling back to 100KHz.",
-                    (unsigned long)speed);
+                    "Invalid I2C frequency: %" PRIu32
+                    " Hz. PM1 only supports 100KHz or 400KHz. Falling back to 100KHz.",
+                    speed);
         _requestedSpeed = M5PM1_I2C_FREQ_100K;
     } else {
         _requestedSpeed = speed;
@@ -832,8 +837,7 @@ m5pm1_err_t M5PM1::begin(i2c_master_bus_handle_t bus, uint8_t addr, uint32_t spe
     dev_config.scl_speed_hz = _requestedSpeed;
     ret                     = i2c_master_bus_add_device(_i2c_master_bus, &dev_config, &_i2c_master_dev);
     if (ret != ESP_OK) {
-        M5PM1_LOG_E(TAG_I2C, "Failed to switch device to %lu Hz: %s", (unsigned long)_requestedSpeed,
-                    esp_err_to_name(ret));
+        M5PM1_LOG_E(TAG_I2C, "Failed to switch device to %" PRIu32 " Hz: %s", _requestedSpeed, esp_err_to_name(ret));
         _initialized = false;
         return M5PM1_ERR_I2C_CONFIG;
     }
@@ -849,7 +853,7 @@ m5pm1_err_t M5PM1::begin(i2c_master_bus_handle_t bus, uint8_t addr, uint32_t spe
     }
 
     _initialized = true;
-    M5PM1_LOG_I(TAG_I2C, "M5PM1 initialized at address 0x%02X (I2C: %lu Hz)", _addr, (unsigned long)_requestedSpeed);
+    M5PM1_LOG_I(TAG_I2C, "M5PM1 initialized at address 0x%02X (I2C: %" PRIu32 " Hz)", _addr, _requestedSpeed);
     return M5PM1_OK;
 }
 #endif  // M5PM1_HAS_I2C_MASTER
@@ -866,8 +870,9 @@ m5pm1_err_t M5PM1::begin(i2c_bus_handle_t bus, uint8_t addr, uint32_t speed)
     // Step 1: Validate requested speed and store it
     if (!_isValidI2cFrequency(speed)) {
         M5PM1_LOG_W(TAG_I2C,
-                    "Invalid I2C frequency: %lu Hz. PM1 only supports 100KHz or 400KHz. Falling back to 100KHz.",
-                    (unsigned long)speed);
+                    "Invalid I2C frequency: %" PRIu32
+                    " Hz. PM1 only supports 100KHz or 400KHz. Falling back to 100KHz.",
+                    speed);
         _requestedSpeed = M5PM1_I2C_FREQ_100K;
     } else {
         _requestedSpeed = speed;
@@ -943,7 +948,7 @@ m5pm1_err_t M5PM1::begin(i2c_bus_handle_t bus, uint8_t addr, uint32_t speed)
 
     _i2c_device = i2c_bus_device_create(bus, addr, _requestedSpeed);
     if (_i2c_device == nullptr) {
-        M5PM1_LOG_E(TAG_I2C, "Failed to switch device to %lu Hz", (unsigned long)_requestedSpeed);
+        M5PM1_LOG_E(TAG_I2C, "Failed to switch device to %" PRIu32 " Hz", _requestedSpeed);
         _initialized = false;
         return M5PM1_ERR_I2C_CONFIG;
     }
@@ -959,7 +964,7 @@ m5pm1_err_t M5PM1::begin(i2c_bus_handle_t bus, uint8_t addr, uint32_t speed)
     }
 
     _initialized = true;
-    M5PM1_LOG_I(TAG_I2C, "M5PM1 initialized at address 0x%02X (I2C: %lu Hz)", _addr, (unsigned long)_requestedSpeed);
+    M5PM1_LOG_I(TAG_I2C, "M5PM1 initialized at address 0x%02X (I2C: %" PRIu32 " Hz)", _addr, _requestedSpeed);
     return M5PM1_OK;
 }
 #endif  // M5PM1_HAS_I2C_BUS
@@ -980,7 +985,7 @@ m5pm1_err_t M5PM1::begin(m5::I2C_Class* i2c, uint8_t addr, uint32_t speed)
     // 步骤1：校验用户频率并记录
     // Step 1: Validate requested speed
     if (!_isValidI2cFrequency(speed)) {
-        M5PM1_LOG_W(TAG_I2C, "Invalid I2C frequency: %lu Hz. Falling back to 100KHz.", (unsigned long)speed);
+        M5PM1_LOG_W(TAG_I2C, "Invalid I2C frequency: %" PRIu32 " Hz. Falling back to 100KHz.", speed);
         _requestedSpeed = M5PM1_I2C_FREQ_100K;
     } else {
         _requestedSpeed = speed;
@@ -1039,8 +1044,8 @@ m5pm1_err_t M5PM1::begin(m5::I2C_Class* i2c, uint8_t addr, uint32_t speed)
     }
 
     _initialized = true;
-    M5PM1_LOG_I(TAG_I2C, "M5PM1 initialized via M5Unified I2C at address 0x%02X (%lu Hz)", _addr,
-                (unsigned long)_requestedSpeed);
+    M5PM1_LOG_I(TAG_I2C, "M5PM1 initialized via M5Unified I2C at address 0x%02X (%" PRIu32 " Hz)", _addr,
+                _requestedSpeed);
     return M5PM1_OK;
 }
 #endif  // M5PM1_HAS_M5UNIFIED_I2C
@@ -1708,6 +1713,11 @@ bool M5PM1::_writeReg16(uint8_t reg, uint16_t value)
 
 bool M5PM1::_readReg(uint8_t reg, uint8_t* value)
 {
+    if (value == nullptr) {
+        M5PM1_LOG_E(TAG_I2C, "Read  Reg[0x%02X] failed: null value", reg);
+        return false;
+    }
+
     _checkAutoWake();
     bool success = false;
     for (int attempt = 0; attempt < M5PM1_I2C_RETRY_COUNT; ++attempt) {
@@ -1766,6 +1776,11 @@ bool M5PM1::_readReg(uint8_t reg, uint8_t* value)
 
 bool M5PM1::_readReg16(uint8_t reg, uint16_t* value)
 {
+    if (value == nullptr) {
+        M5PM1_LOG_E(TAG_I2C, "Read16 Reg[0x%02X] failed: null value", reg);
+        return false;
+    }
+
     _checkAutoWake();
     bool success = false;
     for (int attempt = 0; attempt < M5PM1_I2C_RETRY_COUNT; ++attempt) {
@@ -1824,6 +1839,11 @@ bool M5PM1::_readReg16(uint8_t reg, uint16_t* value)
 
 bool M5PM1::_writeBytes(uint8_t reg, const uint8_t* data, uint8_t len)
 {
+    if (data == nullptr && len > 0) {
+        M5PM1_LOG_E(TAG_I2C, "WriteBytes Reg[0x%02X] len=%d failed: null data", reg, len);
+        return false;
+    }
+
     _checkAutoWake();
     bool success = false;
     for (int attempt = 0; attempt < M5PM1_I2C_RETRY_COUNT; ++attempt) {
@@ -1883,6 +1903,11 @@ bool M5PM1::_writeBytes(uint8_t reg, const uint8_t* data, uint8_t len)
 
 bool M5PM1::_readBytes(uint8_t reg, uint8_t* data, uint8_t len)
 {
+    if (data == nullptr && len > 0) {
+        M5PM1_LOG_E(TAG_I2C, "ReadBytes  Reg[0x%02X] len=%d failed: null data", reg, len);
+        return false;
+    }
+
     _checkAutoWake();
     bool success = false;
     for (int attempt = 0; attempt < M5PM1_I2C_RETRY_COUNT; ++attempt) {
@@ -3443,7 +3468,7 @@ m5pm1_err_t M5PM1::timerSet(uint32_t seconds, m5pm1_tim_action_t action)
 
     // 验证定时器计数值 (最大 214748364 秒) / Validate timer count (max 214748364 seconds)
     if (seconds > 214748364) {
-        M5PM1_LOG_E(TAG_SYS, "Invalid timer count: %lu (max 214748364, ~6.8 years)", seconds);
+        M5PM1_LOG_E(TAG_SYS, "Invalid timer count: %" PRIu32 " (max 214748364, ~6.8 years)", seconds);
         return M5PM1_ERR_INVALID_ARG;
     }
 
@@ -3465,7 +3490,7 @@ m5pm1_err_t M5PM1::timerSet(uint32_t seconds, m5pm1_tim_action_t action)
 
     // 重载定时器 / Reload timer
     if (!_writeReg(M5PM1_REG_TIM_KEY, M5PM1_TIM_RELOAD_KEY)) return M5PM1_ERR_I2C_COMM;
-    M5PM1_LOG_D(TAG_SYS, "timerSet: %lu sec action=%d", seconds, (int)action);
+    M5PM1_LOG_D(TAG_SYS, "timerSet: %" PRIu32 " sec action=%d", seconds, (int)action);
     return M5PM1_OK;
 }
 
@@ -4913,7 +4938,7 @@ m5pm1_err_t M5PM1::switchI2cSpeed(m5pm1_i2c_speed_t speed)
 
     uint32_t targetFreq = (speed == M5PM1_I2C_SPEED_400K) ? M5PM1_I2C_FREQ_400K : M5PM1_I2C_FREQ_100K;
     if (targetFreq == _requestedSpeed) {
-        M5PM1_LOG_I(TAG_I2C, "I2C speed already at %lu Hz, no change needed", (unsigned long)targetFreq);
+        M5PM1_LOG_I(TAG_I2C, "I2C speed already at %" PRIu32 " Hz, no change needed", targetFreq);
         return M5PM1_OK;
     }
 
@@ -4943,14 +4968,14 @@ m5pm1_err_t M5PM1::switchI2cSpeed(m5pm1_i2c_speed_t speed)
 #if M5PM1_HAS_M5UNIFIED_I2C
     if (_m5_i2c) {
         _commFreq = targetFreq;
-        M5PM1_LOG_D(TAG_I2C, "M5Unified I2C frequency updated to %lu Hz", (unsigned long)targetFreq);
+        M5PM1_LOG_D(TAG_I2C, "M5Unified I2C frequency updated to %" PRIu32 " Hz", targetFreq);
     } else
 #endif
     {
         _wire->end();
         M5PM1_DELAY_MS(10);
         if (!_wire->begin(_sda, _scl, targetFreq)) {
-            M5PM1_LOG_E(TAG_I2C, "Failed to re-initialize I2C bus at %lu Hz", (unsigned long)targetFreq);
+            M5PM1_LOG_E(TAG_I2C, "Failed to re-initialize I2C bus at %" PRIu32 " Hz", targetFreq);
             _wire->begin(_sda, _scl, originalFreq);
             _writeReg(M5PM1_REG_I2C_CFG, originalCfg);
             return M5PM1_ERR_I2C_CONFIG;
@@ -4984,7 +5009,7 @@ m5pm1_err_t M5PM1::switchI2cSpeed(m5pm1_i2c_speed_t speed)
 
                 ret = i2c_master_bus_add_device(_i2c_master_bus, &dev_config, &_i2c_master_dev);
                 if (ret != ESP_OK) {
-                    M5PM1_LOG_E(TAG_I2C, "Failed to add I2C device at %lu Hz: %s", (unsigned long)targetFreq,
+                    M5PM1_LOG_E(TAG_I2C, "Failed to add I2C device at %" PRIu32 " Hz: %s", targetFreq,
                                 esp_err_to_name(ret));
                     dev_config.scl_speed_hz = originalFreq;
                     i2c_master_bus_add_device(_i2c_master_bus, &dev_config, &_i2c_master_dev);
@@ -5005,7 +5030,7 @@ m5pm1_err_t M5PM1::switchI2cSpeed(m5pm1_i2c_speed_t speed)
                 }
                 _i2c_device = i2c_bus_device_create(_i2c_bus, _addr, targetFreq);
                 if (_i2c_device == nullptr) {
-                    M5PM1_LOG_E(TAG_I2C, "Failed to create I2C device at %lu Hz", (unsigned long)targetFreq);
+                    M5PM1_LOG_E(TAG_I2C, "Failed to create I2C device at %" PRIu32 " Hz", targetFreq);
                     _i2c_device = i2c_bus_device_create(_i2c_bus, _addr, originalFreq);
                     _writeReg(M5PM1_REG_I2C_CFG, originalCfg);
                     return M5PM1_ERR_I2C_CONFIG;
@@ -5028,14 +5053,14 @@ m5pm1_err_t M5PM1::switchI2cSpeed(m5pm1_i2c_speed_t speed)
                 M5PM1_LOG_E(TAG_I2C, "i2c_param_config failed: %s", esp_err_to_name(ret));
                 return M5PM1_ERR_I2C_CONFIG;
             }
-            M5PM1_LOG_D(TAG_I2C, "Legacy I2C reconfigured to %lu Hz", (unsigned long)targetFreq);
+            M5PM1_LOG_D(TAG_I2C, "Legacy I2C reconfigured to %" PRIu32 " Hz", targetFreq);
             break;
         }
 #endif  // !M5PM1_HAS_I2C_MASTER && !M5PM1_HAS_I2C_BUS
 #if M5PM1_HAS_M5UNIFIED_I2C
         case M5PM1_I2C_DRIVER_M5UNIFIED:
             _commFreq = targetFreq;
-            M5PM1_LOG_D(TAG_I2C, "M5Unified I2C frequency updated to %lu Hz", (unsigned long)targetFreq);
+            M5PM1_LOG_D(TAG_I2C, "M5Unified I2C frequency updated to %" PRIu32 " Hz", targetFreq);
             break;
 #endif
         default:
@@ -5046,7 +5071,7 @@ m5pm1_err_t M5PM1::switchI2cSpeed(m5pm1_i2c_speed_t speed)
 
     uint8_t id = 0;
     if (!_readReg(M5PM1_REG_DEVICE_ID, &id)) {
-        M5PM1_LOG_E(TAG_I2C, "Communication failed after switching to %lu Hz, reverting", (unsigned long)targetFreq);
+        M5PM1_LOG_E(TAG_I2C, "Communication failed after switching to %" PRIu32 " Hz, reverting", targetFreq);
 
 #ifdef ARDUINO
 #if M5PM1_HAS_M5UNIFIED_I2C
@@ -5120,7 +5145,7 @@ m5pm1_err_t M5PM1::switchI2cSpeed(m5pm1_i2c_speed_t speed)
     _i2cConfig.speed400k = (speed == M5PM1_I2C_SPEED_400K);
     _i2cConfigValid      = true;
 
-    M5PM1_LOG_I(TAG_I2C, "Successfully switched to %lu Hz I2C mode", (unsigned long)targetFreq);
+    M5PM1_LOG_I(TAG_I2C, "Successfully switched to %" PRIu32 " Hz I2C mode", targetFreq);
     return M5PM1_OK;
 }
 

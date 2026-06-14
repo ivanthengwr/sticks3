@@ -30,13 +30,15 @@
 #define I2S_PORT        I2S_NUM_0
 #define AUDIO_SAMPLE_RATE   16000
 #define AUDIO_BITS_PER_SAMPLE 16
+#define STARTUP_SPLASH_MS     3000
+#define RECORD_DURATION_MS    9000
 
 /* ── AW8737 power amplifier (enabled via M5PM1 PMIC) ─────────────────────── */
 #define M5PM1_I2C_ADDR  0x6E
 /* PYG3_SPK_Pulse (SHDN of AW8737) is driven by PMIC – see m5pm1.c          */
 
 /* ── Buttons ──────────────────────────────────────────────────────────────── */
-#define BTN_KEY1_GPIO   12      /* navigate / next item (active-low)        */
+#define BTN_KEY1_GPIO   12      /* 1x prev / 2x next    (active-low)        */
 #define BTN_KEY2_GPIO   11      /* select / confirm     (active-low)        */
 
 /* ── IR (not used in this demo, defined for reference) ───────────────────── */
@@ -49,6 +51,13 @@
 #define WATERING_ADC_GPIO   10       /* white wire – capacitive moisture ADC   */
 #define WATERING_PUMP_GPIO  9        /* yellow wire – pump enable (active-high) */
 #define WATERING_DRY_THRESHOLD  3000  /* raw ADC counts: above = soil dry      */
-#define WATERING_PUMP_ON_MS  3000   /* pump run time per demo cycle (ms)      */
-#define WATERING_MEASURE_MS   500   /* sensor read interval during demo (ms)  */
-#define WATERING_DEMO_CYCLES    5   /* number of sense→pump cycles in demo    */
+/* USB-safe pulse mode — long enough to move water on laptop USB power       */
+#define WATERING_DEMO_CYCLES        3   /* sense→pump cycles in demo           */
+#define WATERING_PUMP_ON_MS      6000   /* total pump window per cycle (ms)    */
+#define WATERING_PUMP_RUN_DUTY_PCT  55  /* peak PWM % during pump pulses       */
+#define WATERING_PULSE_ON_MS      500   /* pump ON slice within each pulse     */
+#define WATERING_PULSE_OFF_MS     200   /* pump OFF slice (USB recovery)       */
+#define WATERING_PUMP_HOLD_MS    2000   /* steady pull after pulses (ms)       */
+#define WATERING_PUMP_HOLD_DUTY_PCT 48  /* PWM % during final hold phase       */
+#define WATERING_MEASURE_MS       400   /* delay after sensor read (ms)        */
+#define WATERING_RECOVERY_MS     1500   /* rest after pump OFF before next cycle */

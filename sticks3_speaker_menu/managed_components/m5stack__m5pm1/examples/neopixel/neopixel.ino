@@ -126,8 +126,9 @@ void setup()
 
     // setLedEnLevel() 主要用于 Stamp-S3Bat 产品，该产品使用默认的指示灯引脚作为RGB的供电引脚。
     // 其他产品可根据硬件设计决定是否调用。默认保留以兼容 Stamp-S3Bat。
-    // setLedEnLevel() is mainly for the Stamp-S3Bat product, which uses the default indicator LED pin as the power supply pin for RGB.
-    // Other products may or may not need this depending on hardware design. Kept by default for Stamp-S3Bat compatibility.
+    // setLedEnLevel() is mainly for the Stamp-S3Bat product, which uses the default indicator LED pin as the power
+    // supply pin for RGB. Other products may or may not need this depending on hardware design. Kept by default for
+    // Stamp-S3Bat compatibility.
     pm1.setLedEnLevel(true);
 
     // 设置灯珠数量（1-32，固件最大支持32）。

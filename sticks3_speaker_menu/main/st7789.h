@@ -27,3 +27,4 @@ void st7789_draw_pixel(int16_t x, int16_t y, uint16_t color);
 void st7789_draw_hline(int16_t x, int16_t y, int16_t len, uint16_t color);
 void st7789_draw_vline(int16_t x, int16_t y, int16_t len, uint16_t color);
 void st7789_draw_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
+void st7789_draw_bitmap(int16_t x, int16_t y, int16_t w, int16_t h, const uint16_t *pixels);

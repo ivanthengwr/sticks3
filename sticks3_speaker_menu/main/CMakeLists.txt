@@ -7,7 +7,7 @@ idf_component_register(
         "m5pm1.cpp"
         "audio.c"
         "watering.c"
-    INCLUDE_DIRS "."
+    INCLUDE_DIRS "." "voice"
     REQUIRES
         driver
         esp_adc

@@ -5,6 +5,7 @@ idf_component_register(
         "src"
     REQUIRES
         "driver"
+        "esp_rom"
         "espressif__i2c_bus"
 )
 

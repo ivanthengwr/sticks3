@@ -19,3 +19,6 @@ CONFIG_FREERTOS_HZ=1000
 
 # Log
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+
+# More brownout margin when pump inrush sags USB VBUS (rebuild: idf.py fullclean build)
+CONFIG_ESP_BROWNOUT_DET_LVL_SEL_1=y
